@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniCode</title>
+    <style>
+        :root {
+            --bg-dark: #1e1e1e;
+            --bg-sidebar: #252526;
+            --text-light: #cccccc;
+            --accent: #007acc;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            overflow: hidden;
+        }
+        /* 左側邊欄設計 */
+        #sidebar {
+            width: 250px;
+            background-color: var(--bg-sidebar);
+            border-right: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            box-sizing: border-box;
+        }
+        .header-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #fff;
+        }
+        .btn {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            padding: 10px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+        .btn:hover { background-color: #005f9e; }
+        .btn:active { transform: scale(0.98); }
+        
+        #file-info {
+            margin-top: 20px;
+            font-size: 13px;
+            color: #858585;
+            word-break: break-all;
+        }
+        /* 右側編輯器區域 */
+        #editor-container {
+            flex: 1;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <div class="header-title">OmniCode Web</div>
+        <button class="btn" onclick="openLocalFile()">📂 開啟本地檔案</button>
+        <button class="btn" onclick="saveLocalFile()">💾 儲存檔案 (Ctrl+S)</button>
+        <div id="file-info">尚未開啟檔案</div>
+    </div>
+
+    <div id="editor-container"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
+    <script>
+        // 1. 初始化 Monaco Editor (從 CDN 動態載入)
+        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+        
+        let editor;
+        let currentFileHandle = null;
+
+        require(['vs/editor/editor.main'], function() {
+            editor = monaco.editor.create(document.getElementById('editor-container'), {
+                value: '// 歡迎來到 OmniCode Web 🚀\n// 1. 點擊左側「開啟本地檔案」\n// 2. 隨意編輯內容\n// 3. 點擊「儲存檔案」即可直接覆寫你電腦中的檔案！\n\nconsole.log("Hello, World!");',
+                language: 'javascript',
+                theme: 'vs-dark',
+                automaticLayout: true, // 自動適應視窗大小
+                fontSize: 14,
+                minimap: { enabled: true } // 開啟右側迷你地圖
+            });
+
+            // 綁定 Ctrl+S 快捷鍵
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() {
+                saveLocalFile();
+            });
+        });
+
+        // 2. File System Access API: 開啟檔案
+        async function openLocalFile() {
+            try {
+                // 呼叫原生檔案選擇器
+                [currentFileHandle] = await window.showOpenFilePicker();
+                const file = await currentFileHandle.getFile();
+                const contents = await file.text();
+                
+                // 簡易的語言偵測 (可依賴副檔名擴充)
+                const extension = file.name.split('.').pop().toLowerCase();
+                const languageMap = {
+                    'js': 'javascript', 'html': 'html', 'css': 'css', 
+                    'py': 'python', 'json': 'json', 'md': 'markdown',
+                    'rs': 'rust', 'cpp': 'cpp', 'c': 'c'
+                };
+                const lang = languageMap[extension] || 'plaintext';
+
+                // 更新編輯器內容與語言
+                monaco.editor.setModelLanguage(editor.getModel(), lang);
+                editor.setValue(contents);
+                
+                // 更新 UI 狀態
+                document.getElementById('file-info').innerHTML = `<strong>目前編輯:</strong><br>${file.name}<br><br>語言: ${lang}`;
+            } catch (err) {
+                // 使用者取消選取或 API 不支援
+                if (err.name !== 'AbortError') {
+                    console.error('開啟檔案失敗:', err);
+                    alert('開啟檔案失敗，請確保使用 Chrome/Edge 瀏覽器。');
+                }
+            }
+        }
+
+        // 3. File System Access API: 儲存檔案
+        async function saveLocalFile() {
+            if (!currentFileHandle) {
+                alert('請先開啟一個檔案！');
+                return;
+            }
+            try {
+                // 建立寫入流並寫入編輯器內容
+                const writable = await currentFileHandle.createWritable();
+                await writable.write(editor.getValue());
+                await writable.close();
+                
+                // 簡單的儲存成功提示
+                const infoDiv = document.getElementById('file-info');
+                const originalText = infoDiv.innerHTML;
+                infoDiv.innerHTML = `<span style="color: #4caf50;">✔ 儲存成功！</span>`;
+                setTimeout(() => infoDiv.innerHTML = originalText, 2000);
+            } catch (err) {
+                console.error('儲存檔案失敗:', err);
+                alert('儲存失敗！可能是權限問題。');
+            }
+        }
+    </script>
+</body>
+</html>
